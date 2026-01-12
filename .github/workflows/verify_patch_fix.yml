@@ -1,0 +1,77 @@
+name: Verify Manual Patch for Maven 3.9.12
+on: workflow_dispatch
+
+jobs:
+  verify-patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup JFrog CLI
+        uses: jfrog/setup-jfrog-cli@v4
+        env:
+          JF_URL: ${{ secrets.JF_URL }}
+          JF_ACCESS_TOKEN: ${{ secrets.JF_ACCESS_TOKEN }}
+
+      # 1. Setup the Environment with the BROKEN Maven 3.9.12
+      # We want to prove that the patch makes 3.9.12 work.
+      - name: Setup Java 21 (Default is Maven 3.9.12)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Check Maven Version
+        run: mvn -version
+
+      - name: Generate Project
+        run: |
+          mvn archetype:generate -DgroupId=com.jfrog.repro \
+          -DartifactId=patch-test \
+          -DarchetypeArtifactId=maven-archetype-quickstart \
+          -DinteractiveMode=false
+
+      # 2. THE SURGERY: Download and Patch the Extractor JAR
+      - name: Patch JFrog Extractor JAR
+        run: |
+          # Define paths
+          JFROG_HOME=~/.jfrog
+          EXTRACTOR_VERSION=2.43.4
+          JAR_DIR=$JFROG_HOME/dependencies/maven/$EXTRACTOR_VERSION
+          JAR_NAME=build-info-extractor-maven3-$EXTRACTOR_VERSION-uber.jar
+          FULL_PATH=$JAR_DIR/$JAR_NAME
+
+          # Create directory
+          mkdir -p $JAR_DIR
+          
+          # Download the official (broken) JAR
+          echo "Downloading official JAR..."
+          wget -O $FULL_PATH "https://releases.jfrog.io/artifactory/oss-release-local/org/jfrog/buildinfo/build-info-extractor-maven3/$EXTRACTOR_VERSION/build-info-extractor-maven3-$EXTRACTOR_VERSION-uber.jar"
+
+          # Extract components.xml
+          echo "Extracting components.xml..."
+          unzip $FULL_PATH META-INF/plexus/components.xml -d .
+          
+          # Apply the XML Patch (Injecting the prerequisitesCheckers requirement)
+          # We use sed to find the 'pluginValidationManager' field and append our new requirement after it.
+          echo "Patching components.xml..."
+          sed -i '/<field-name>pluginValidationManager<\/field-name>/a \ \ \ \ \ \ \ \ \ \ <requirement>\n\ \ \ \ \ \ \ \ \ \ \ \ <role>java.util.List<\/role>\n\ \ \ \ \ \ \ \ \ \ \ \ <field-name>prerequisitesCheckers<\/field-name>\n\ \ \ \ \ \ \ \ \ \ <\/requirement>' META-INF/plexus/components.xml
+
+          # Verify the patch looks correct (optional debug)
+          cat META-INF/plexus/components.xml | grep -A 5 "pluginValidationManager"
+
+          # Update the JAR with the patched file
+          echo "Repacking JAR..."
+          zip -u $FULL_PATH META-INF/plexus/components.xml
+          
+          echo "Patch complete. CLI will now use this cached JAR."
+
+      # 3. Run Build with Patched JAR
+      - name: Configure Artifactory
+        working-directory: ./patch-test
+        run: jf mvn-config --repo-resolve-releases=libs-release --repo-resolve-snapshots=libs-snapshot
+
+      - name: Run Build (Expect Success on Maven 3.9.12)
+        working-directory: ./patch-test
+        run: jf mvn clean install
