@@ -1,0 +1,76 @@
+name: Reproduce JFrog Maven Bug
+on: workflow_dispatch
+
+jobs:
+  # JOB 1: Reproduce the Crash with Maven 3.9.12
+  reproduce-crash:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup JFrog CLI
+        uses: jfrog/setup-jfrog-cli@v4
+        env:
+          JF_URL: ${{ secrets.JF_URL }}
+          JF_ACCESS_TOKEN: ${{ secrets.JF_ACCESS_TOKEN }}
+
+      - name: Setup Java 21 & Maven 3.9.12 (The Problem Version)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          maven-version: '3.9.12' # <--- This version introduced the bug
+
+      - name: Generate Simple Maven Project
+        run: |
+          mvn archetype:generate -DgroupId=com.jfrog.repro \
+          -DartifactId=crash-test \
+          -DarchetypeArtifactId=maven-archetype-quickstart \
+          -DinteractiveMode=false
+
+      - name: Configure Artifactory Resolution
+        working-directory: ./crash-test
+        # We configure it to use JCenter or a Virtual repo to ensure the wrapper engages
+        run: jf mvn-config --repo-resolve-releases=libs-release --repo-resolve-snapshots=libs-snapshot
+
+      - name: Run Build (Expect Failure)
+        working-directory: ./crash-test
+        run: jf mvn clean install
+
+  # JOB 2: Verify the Fix with Maven 3.9.11
+  verify-fix:
+    needs: reproduce-crash
+    if: always() # Run even if the previous job crashes
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup JFrog CLI
+        uses: jfrog/setup-jfrog-cli@v4
+        env:
+          JF_URL: ${{ secrets.JF_URL }}
+          JF_ACCESS_TOKEN: ${{ secrets.JF_ACCESS_TOKEN }}
+
+      - name: Setup Java 21 & Maven 3.9.11 (The Fix)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          maven-version: '3.9.11' # <--- Downgrading to the stable version
+
+      - name: Generate Simple Maven Project
+        run: |
+          mvn archetype:generate -DgroupId=com.jfrog.repro \
+          -DartifactId=fix-test \
+          -DarchetypeArtifactId=maven-archetype-quickstart \
+          -DinteractiveMode=false
+
+      - name: Configure Artifactory Resolution
+        working-directory: ./fix-test
+        run: jf mvn-config --repo-resolve-releases=libs-release --repo-resolve-snapshots=libs-snapshot
+
+      - name: Run Build (Expect Success)
+        working-directory: ./fix-test
+        run: jf mvn clean install
