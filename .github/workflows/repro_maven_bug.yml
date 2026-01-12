@@ -1,4 +1,4 @@
-name: Reproduce JFrog Maven Bug (Pinned Fix 3.9.11)
+name: Reproduce JFrog Maven Bug (Action Pinning)
 on: workflow_dispatch
 
 jobs:
@@ -15,13 +15,14 @@ jobs:
           JF_URL: ${{ secrets.JF_URL }}
           JF_ACCESS_TOKEN: ${{ secrets.JF_ACCESS_TOKEN }}
 
-      - name: Setup Java 21
+      # Default setup uses the runner's Maven (3.9.12) -> EXPECT FAILURE
+      - name: Setup Java 21 (Default Maven)
         uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
 
-      - name: Check Maven Version (Expect 3.9.12)
+      - name: Check Maven Version
         run: mvn -version
 
       - name: Generate Project
@@ -39,7 +40,7 @@ jobs:
         working-directory: ./crash-test
         run: jf mvn clean install
 
-  # JOB 2: Verify the Fix (Manually Install Maven 3.9.11)
+  # JOB 2: Verify the Fix (Pinning Maven 3.9.11 via Action)
   verify-fix:
     needs: reproduce-crash
     if: always()
@@ -54,20 +55,15 @@ jobs:
           JF_URL: ${{ secrets.JF_URL }}
           JF_ACCESS_TOKEN: ${{ secrets.JF_ACCESS_TOKEN }}
 
-      - name: Setup Java 21
-        uses: actions/setup-java@v4
+      # --- THE FIX: Pinning Maven 3.9.11 using s4u action ---
+      - name: Setup Java 21 & Maven 3.9.11
+        uses: s4u/setup-maven-action@v1.18.0
         with:
           java-version: '21'
-          distribution: 'temurin'
+          java-distribution: 'temurin'
+          maven-version: '3.9.11' # <--- This successfully forces the version
 
-      # --- THE FIX: Manually Install Maven 3.9.11 ---
-      - name: Install Maven 3.9.11
-        run: |
-          wget https://archive.apache.org/dist/maven/maven-3/3.9.11/binaries/apache-maven-3.9.11-bin.tar.gz
-          tar -xvf apache-maven-3.9.11-bin.tar.gz
-          echo "$(pwd)/apache-maven-3.9.11/bin" >> $GITHUB_PATH
-
-      - name: Check Maven Version (Expect 3.9.11)
+      - name: Check Maven Version
         run: mvn -version
 
       - name: Generate Project
