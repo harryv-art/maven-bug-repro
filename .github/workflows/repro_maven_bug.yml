@@ -1,4 +1,4 @@
-name: Reproduce JFrog Maven Bug (Corrected)
+name: Reproduce JFrog Maven Bug (Pinned Fix 3.9.11)
 on: workflow_dispatch
 
 jobs:
@@ -33,14 +33,13 @@ jobs:
 
       - name: Configure Artifactory
         working-directory: ./crash-test
-        # Ensure your 'libs-release' virtual repo has 'maven-central' included!
         run: jf mvn-config --repo-resolve-releases=libs-release --repo-resolve-snapshots=libs-snapshot
 
       - name: Run Build (Expect Failure)
         working-directory: ./crash-test
         run: jf mvn clean install
 
-  # JOB 2: Verify the Fix (Manually Install Maven 3.9.9)
+  # JOB 2: Verify the Fix (Manually Install Maven 3.9.11)
   verify-fix:
     needs: reproduce-crash
     if: always()
@@ -61,14 +60,14 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
-      # --- THE FIX: Manually Install Maven 3.9.9 ---
-      - name: Install Maven 3.9.9
+      # --- THE FIX: Manually Install Maven 3.9.11 ---
+      - name: Install Maven 3.9.11
         run: |
-          wget https://archive.apache.org/dist/maven/maven-3/3.9.9/binaries/apache-maven-3.9.9-bin.tar.gz
-          tar -xvf apache-maven-3.9.9-bin.tar.gz
-          echo "$(pwd)/apache-maven-3.9.9/bin" >> $GITHUB_PATH
+          wget https://archive.apache.org/dist/maven/maven-3/3.9.11/binaries/apache-maven-3.9.11-bin.tar.gz
+          tar -xvf apache-maven-3.9.11-bin.tar.gz
+          echo "$(pwd)/apache-maven-3.9.11/bin" >> $GITHUB_PATH
 
-      - name: Check Maven Version (Expect 3.9.9)
+      - name: Check Maven Version (Expect 3.9.11)
         run: mvn -version
 
       - name: Generate Project
