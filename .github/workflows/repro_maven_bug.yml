@@ -11,6 +11,8 @@ jobs:
 
       - name: Setup JFrog CLI
         uses: jfrog/setup-jfrog-cli@v4
+        with:
+          version: '2.89.0'  # Pin to 2.89+ for Maven 3.9.12 fix (RTECO-753)
         env:
           JF_URL: ${{ secrets.JF_URL }}
           JF_ACCESS_TOKEN: ${{ secrets.JF_ACCESS_TOKEN }}
@@ -54,6 +56,8 @@ jobs:
 
       - name: Setup JFrog CLI
         uses: jfrog/setup-jfrog-cli@v4
+        with:
+          version: '2.89.0'  # Pin to 2.89+ for Maven 3.9.12 fix (RTECO-753)
         env:
           JF_URL: ${{ secrets.JF_URL }}
           JF_ACCESS_TOKEN: ${{ secrets.JF_ACCESS_TOKEN }}
