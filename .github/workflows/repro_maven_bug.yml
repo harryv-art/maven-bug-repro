@@ -2,8 +2,8 @@ name: Reproduce JFrog Maven Bug (Action Pinning)
 on: workflow_dispatch
 
 jobs:
-  # JOB 1: Reproduce the Crash (Uses Default Maven 3.9.12)
-  reproduce-crash:
+  # JOB 1: Test with default Maven 3.9.12 — PASSES if JFrog CLI is patched (RTECO-753)
+  test-default-maven:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -15,7 +15,10 @@ jobs:
           JF_URL: ${{ secrets.JF_URL }}
           JF_ACCESS_TOKEN: ${{ secrets.JF_ACCESS_TOKEN }}
 
-      # Default setup uses the runner's Maven (3.9.12) -> EXPECT FAILURE
+      - name: Check JFrog CLI Version
+        run: jf --version
+
+      # Default setup uses the runner's Maven (3.9.12)
       - name: Setup Java 21 (Default Maven)
         uses: actions/setup-java@v4
         with:
@@ -36,13 +39,13 @@ jobs:
         working-directory: ./crash-test
         run: jf mvn-config --repo-resolve-releases=libs-release --repo-resolve-snapshots=libs-snapshot
 
-      - name: Run Build (Expect Failure)
+      - name: Run Build (Passes if CLI is patched for Maven 3.9.12)
         working-directory: ./crash-test
         run: jf mvn clean install
 
-  # JOB 2: Verify the Fix (Pinning Maven 3.9.11 via Action)
+  # JOB 2: Fallback — verify with pinned Maven 3.9.11 (workaround)
   verify-fix:
-    needs: reproduce-crash
+    needs: test-default-maven
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -55,7 +58,10 @@ jobs:
           JF_URL: ${{ secrets.JF_URL }}
           JF_ACCESS_TOKEN: ${{ secrets.JF_ACCESS_TOKEN }}
 
-      # --- THE FIX: Pinning Maven 3.9.11 using s4u action ---
+      - name: Check JFrog CLI Version
+        run: jf --version
+
+      # --- Workaround: Pinning Maven 3.9.11 using s4u action ---
       - name: Setup Java 21 & Maven 3.9.11
         uses: s4u/setup-maven-action@v1.18.0
         with:
@@ -77,6 +83,6 @@ jobs:
         working-directory: ./fix-test
         run: jf mvn-config --repo-resolve-releases=libs-release --repo-resolve-snapshots=libs-snapshot
 
-      - name: Run Build (Expect Success)
+      - name: Run Build (Maven 3.9.11 workaround)
         working-directory: ./fix-test
         run: jf mvn clean install
